@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[8]:
 
 
 import findspark
 findspark.init()
 
 
-# In[2]:
+# In[9]:
 
 
 from pyspark.sql import SparkSession
@@ -18,14 +18,14 @@ from pyspark.sql.window import Window
 
 # ### Postgres Params
 
-# In[3]:
+# In[10]:
 
 
 import os
 from dotenv import load_dotenv
 
 
-# In[4]:
+# In[11]:
 
 
 load_dotenv()
@@ -39,20 +39,20 @@ DB_PORT = os.getenv("POSTGRES_PORT")
 DB_NAME = os.getenv("POSTGRES_DB")
 
 
-# In[5]:
+# In[12]:
 
 
 jdbc_url =f"jdbc:postgresql://{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 
-# In[6]:
+# In[13]:
 
 
 spark = SparkSession.builder\
     .appName('pagial Analysis').config('spark.jars',JAR_PATH).getOrCreate()
 
 
-# In[7]:
+# In[14]:
 
 
 def read_table(table_name:str):
@@ -78,7 +78,7 @@ def read_table(table_name:str):
         return None
 
 
-# In[8]:
+# In[15]:
 
 
 tables = [
@@ -193,29 +193,36 @@ rn_actors_df.show()
 
 # #### - Output cities with the number of active and inactive customers (active - customer.active = 1). Sort by the number of inactive customers in descending order. 
 
-# In[20]:
+# In[18]:
+
+
+dataframes['customer'].printSchema()
+
+
+# In[25]:
 
 
 customer_status_df = dataframes['customer'].join(dataframes['address'], 'address_id', 'inner')\
                     .join(dataframes['city'], 'city_id', 'inner').select('city_id','city','active')
-                    
-fin_cus_status_df = customer_status_df.groupBy("city_id","city").agg(
-                F.sum(F.when(F.col('active') == 1, 1).otherwise(0)).alias('active_count'),
-                F.sum(F.when(F.col('active') == 0, 1).otherwise(0)).alias('inactive_count')
-            ).orderBy(F.desc('inactive_count'))
 
-fin_cus_status_df.show()
+# i thought that will be cleaner if there is records with null values or missing
+
+# fin_cus_status_df = customer_status_df.groupBy("city_id","city").agg(
+#                 F.sum(F.when(F.col('active') == 1, 1).otherwise(0)).alias('active_count'),
+#                 F.sum(F.when(F.col('active') == 0, 1).otherwise(0)).alias('inactive_count')
+#             ).orderBy(F.desc('inactive_count'))
+
+new_customer_status_df = customer_status_df.groupBy("city_id","city").agg(
+        F.sum(F.col('active').cast('int')).alias('active_count'),
+        (F.count(F.col('active')) - F.sum(F.col('active').cast('int'))).alias('inactive_count')
+).orderBy(F.desc('inactive_count'))
+
+new_customer_status_df.show()
 
 
 # #### - Output the category of movies that have the highest number of total rental hours in the cities (customer.address_id in this city), and that start with the letter “a”. Do the same for cities with a “-” symbol.
 
-# In[21]:
-
-
-windowSpec_cities = Window.partitionBy('city').orderBy(F.desc('total_hours'))
-
-
-# In[22]:
+# In[16]:
 
 
 category_rental_df = dataframes['rental'].withColumn(
@@ -231,10 +238,12 @@ category_rental_df = dataframes['rental'].withColumn(
 
 total_rent_category_df = category_rental_df.groupBy('city','name').agg(F.sum('hours_rented').alias('total_hours'))
 
-cities_satrt_a = total_rent_category_df.filter(F.col('city').ilike('a%'))
+categories_satrt_a = total_rent_category_df.filter(F.col('name').ilike('a%'))
 cities_have_dash = total_rent_category_df.filter(F.col('city').ilike("%-%"))
 
-rank_cities_a_df = cities_satrt_a.withColumn('rn', F.rank().over(windowSpec_cities)).filter(F.col('rn') == 1)\
+windowSpec_cities = Window.partitionBy('city').orderBy(F.desc('total_hours'))
+
+rank_cities_a_df = categories_satrt_a.withColumn('rn', F.rank().over(windowSpec_cities)).filter(F.col('rn') == 1)\
     .orderBy(F.desc('total_hours'))
 rank_cities_dash_df = cities_have_dash.withColumn('rn', F.rank().over(windowSpec_cities)).filter(F.col('rn')== 1)\
     .orderBy(F.desc('total_hours'))
@@ -243,8 +252,14 @@ fnal_ranked_df = rank_cities_a_df.withColumn('source', F.lit('starts_with_a_citi
     .unionAll(rank_cities_dash_df.withColumn('source', F.lit('contains_dash_cities')))
 
 
-# In[23]:
+# In[17]:
 
 
 fnal_ranked_df.show()
+
+
+# In[ ]:
+
+
+
 
