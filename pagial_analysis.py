@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[8]:
+# In[1]:
 
 
 import findspark
 findspark.init()
 
 
-# In[9]:
+# In[2]:
 
 
 from pyspark.sql import SparkSession
@@ -18,14 +18,14 @@ from pyspark.sql.window import Window
 
 # ### Postgres Params
 
-# In[10]:
+# In[3]:
 
 
 import os
 from dotenv import load_dotenv
 
 
-# In[11]:
+# In[4]:
 
 
 load_dotenv()
@@ -39,20 +39,20 @@ DB_PORT = os.getenv("POSTGRES_PORT")
 DB_NAME = os.getenv("POSTGRES_DB")
 
 
-# In[12]:
+# In[5]:
 
 
 jdbc_url =f"jdbc:postgresql://{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 
-# In[13]:
+# In[6]:
 
 
 spark = SparkSession.builder\
     .appName('pagial Analysis').config('spark.jars',JAR_PATH).getOrCreate()
 
 
-# In[14]:
+# In[7]:
 
 
 def read_table(table_name:str):
@@ -78,7 +78,7 @@ def read_table(table_name:str):
         return None
 
 
-# In[15]:
+# In[9]:
 
 
 tables = [
@@ -222,7 +222,7 @@ new_customer_status_df.show()
 
 # #### - Output the category of movies that have the highest number of total rental hours in the cities (customer.address_id in this city), and that start with the letter “a”. Do the same for cities with a “-” symbol.
 
-# In[16]:
+# In[10]:
 
 
 category_rental_df = dataframes['rental'].withColumn(
@@ -238,12 +238,12 @@ category_rental_df = dataframes['rental'].withColumn(
 
 total_rent_category_df = category_rental_df.groupBy('city','name').agg(F.sum('hours_rented').alias('total_hours'))
 
-categories_satrt_a = total_rent_category_df.filter(F.col('name').ilike('a%'))
+categories_start_a = total_rent_category_df.filter(F.col('name').ilike('a%'))
 cities_have_dash = total_rent_category_df.filter(F.col('city').ilike("%-%"))
 
 windowSpec_cities = Window.partitionBy('city').orderBy(F.desc('total_hours'))
 
-rank_cities_a_df = categories_satrt_a.withColumn('rn', F.rank().over(windowSpec_cities)).filter(F.col('rn') == 1)\
+rank_cities_a_df = categories_start_a.withColumn('rn', F.rank().over(windowSpec_cities)).filter(F.col('rn') == 1)\
     .orderBy(F.desc('total_hours'))
 rank_cities_dash_df = cities_have_dash.withColumn('rn', F.rank().over(windowSpec_cities)).filter(F.col('rn')== 1)\
     .orderBy(F.desc('total_hours'))
@@ -252,7 +252,7 @@ fnal_ranked_df = rank_cities_a_df.withColumn('source', F.lit('starts_with_a_citi
     .unionAll(rank_cities_dash_df.withColumn('source', F.lit('contains_dash_cities')))
 
 
-# In[17]:
+# In[11]:
 
 
 fnal_ranked_df.show()
